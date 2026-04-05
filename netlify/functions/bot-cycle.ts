@@ -1,10 +1,6 @@
 import type { Context } from "@netlify/functions";
 import { createJob, getJob } from "../../src/lib/bot/store";
 
-// ============================================================
-// AUTH
-// ============================================================
-
 function isAuthorized(req: Request): boolean {
   const secret = req.headers.get("x-admin-secret");
   const expected = process.env.ADMIN_SECRET;
@@ -17,10 +13,6 @@ function isAuthorized(req: Request): boolean {
   return diff === 0;
 }
 
-// ============================================================
-// HANDLER
-// ============================================================
-
 export default async function handler(req: Request, _context: Context) {
   if (!isAuthorized(req)) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -29,26 +21,20 @@ export default async function handler(req: Request, _context: Context) {
     });
   }
 
-  // ── POST: dispatch new cycle ───────────────────────────────
   if (req.method === "POST") {
     try {
-      // Generate job ID
-      const jobId = `cycle_${Date.now()}_${Math.random()
-        .toString(36)
-        .slice(2, 7)}`;
-
-      // Store job as dispatched
+      const jobId = `cycle_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       await createJob(jobId);
 
-      // Invoke background function
       const siteUrl =
         process.env.URL ||
         process.env.DEPLOY_URL ||
-        "http://localhost:8888";
+        process.env.NETLIFY_SITE_URL ||
+        `https://dapper-snickerdoodle-dda1b6.netlify.app`;
 
       const bgUrl = `${siteUrl}/.netlify/functions/bot-cycle-background`;
+      console.log(`[cycle] Dispatching job ${jobId} to ${bgUrl}`);
 
-      // Fire and forget — don't await
       fetch(bgUrl, {
         method: "POST",
         headers: {
@@ -57,45 +43,34 @@ export default async function handler(req: Request, _context: Context) {
         },
         body: JSON.stringify({ jobId }),
       }).catch((err) => {
-        console.error("[bot-cycle] Failed to invoke background fn:", err);
+        console.error("[cycle] Failed to invoke background fn:", err);
       });
 
       return new Response(
-        JSON.stringify({
-          ok: true,
-          jobId,
-          message: "Cycle dispatched",
-        }),
-        {
-          status: 202,
-          headers: { "Content-Type": "application/json" },
-        }
+        JSON.stringify({ ok: true, jobId, message: "Cycle dispatched" }),
+        { status: 202, headers: { "Content-Type": "application/json" } }
       );
     } catch (err) {
       return new Response(
-        JSON.stringify({
-          error: err instanceof Error ? err.message : String(err),
-        }),
+        JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
   }
 
-  // ── GET: poll job status ───────────────────────────────────
   if (req.method === "GET") {
     try {
       const url = new URL(req.url);
       const jobId = url.searchParams.get("jobId");
 
       if (!jobId) {
-        return new Response(
-          JSON.stringify({ error: "jobId query param required" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "jobId required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       const job = await getJob(jobId);
-
       if (!job) {
         return new Response(JSON.stringify({ error: "Job not found" }), {
           status: 404,
@@ -109,9 +84,7 @@ export default async function handler(req: Request, _context: Context) {
       });
     } catch (err) {
       return new Response(
-        JSON.stringify({
-          error: err instanceof Error ? err.message : String(err),
-        }),
+        JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
