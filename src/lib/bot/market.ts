@@ -13,74 +13,73 @@ export async function fetchTradingInfo(
   slug: string
 ): Promise<TradingMarketInfo | null> {
   try {
-    // Split on "--" to get event slug and market slug
+    // Try split on "--" first
     const parts = slug.split("--");
-    if (parts.length < 2) {
-      console.warn(`[market] Invalid slug format: ${slug}`);
-      return null;
+    
+    if (parts.length >= 2) {
+      // Standard format: event--market
+      const eventSlug = parts[0];
+      const marketSlug = parts.slice(1).join("--");
+      const result = await fetchByEventAndMarket(eventSlug, marketSlug);
+      if (result) return result;
     }
 
-    const eventSlug = parts[0];
-    const marketSlug = parts.slice(1).join("--");
-
-    // Fetch event from Gamma API
-    const url = `${GAMMA_API}/events?slug=${encodeURIComponent(eventSlug)}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.warn(`[market] Gamma API error ${res.status} for ${eventSlug}`);
-      return null;
-    }
-
-    const events = await res.json();
-    if (!Array.isArray(events) || events.length === 0) {
-      console.warn(`[market] No event found for slug: ${eventSlug}`);
-      return null;
-    }
-
-    const event = events[0];
-    const markets = event.markets ?? [];
-
-    // Find matching sub-market
-    const market = markets.find(
-      (m: { slug: string }) => m.slug === marketSlug
-    );
-
-    if (!market) {
-      console.warn(
-        `[market] No market found for slug: ${marketSlug} in event: ${eventSlug}`
-      );
-      // NEVER fallback to wrong market
-      return null;
-    }
-
-    // Parse token IDs
-    let tokenIds: string[] = [];
-    try {
-      if (typeof market.clobTokenIds === "string") {
-        tokenIds = JSON.parse(market.clobTokenIds);
-      } else if (Array.isArray(market.clobTokenIds)) {
-        tokenIds = market.clobTokenIds;
-      }
-    } catch {
-      console.warn(`[market] Failed to parse clobTokenIds for ${slug}`);
-      return null;
-    }
-
-    if (tokenIds.length < 2) {
-      console.warn(`[market] Not enough token IDs for ${slug}`);
-      return null;
-    }
-
-    return {
-      yesTokenId: tokenIds[0],
-      noTokenId: tokenIds[1],
-      negRisk: market.negRisk ?? false,
-      active: market.active ?? true,
-    };
+    // Fallback: try direct market lookup
+    return await fetchByMarketSlug(slug);
   } catch (err) {
     console.error(`[market] fetchTradingInfo error for ${slug}:`, err);
     return null;
   }
+}
+
+async function fetchByEventAndMarket(
+  eventSlug: string,
+  marketSlug: string
+): Promise<TradingMarketInfo | null> {
+  const url = `${GAMMA_API}/events?slug=${encodeURIComponent(eventSlug)}`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const events = await res.json();
+  if (!Array.isArray(events) || events.length === 0) return null;
+  const event = events[0];
+  const market = (event.markets ?? []).find(
+    (m: { slug: string }) => m.slug === marketSlug
+  );
+  if (!market) return null;
+  return parseMarketTokens(market);
+}
+
+async function fetchByMarketSlug(
+  slug: string
+): Promise<TradingMarketInfo | null> {
+  // Try fetching directly as market slug
+  const url = `${GAMMA_API}/markets?slug=${encodeURIComponent(slug)}`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const markets = await res.json();
+  const list = Array.isArray(markets) ? markets : markets?.markets ?? [];
+  if (list.length === 0) return null;
+  return parseMarketTokens(list[0]);
+}
+
+function parseMarketTokens(market: any): TradingMarketInfo | null {
+  let tokenIds: string[] = [];
+  try {
+    if (typeof market.clobTokenIds === "string") {
+      tokenIds = JSON.parse(market.clobTokenIds);
+    } else if (Array.isArray(market.clobTokenIds)) {
+      tokenIds = market.clobTokenIds;
+    }
+  } catch {
+    return null;
+  }
+  if (tokenIds.length < 2) return null;
+  return {
+    yesTokenId: tokenIds[0],
+    noTokenId: tokenIds[1],
+    negRisk: market.negRisk ?? false,
+    active: market.active ?? true,
+  };
 }
 
 // ============================================================
