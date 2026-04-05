@@ -10,6 +10,19 @@
   timeout = 900
 
 [[redirects]]
-  from = "/api/bot/*"
-  to = "/.netlify/functions/:splat"
+  from = "/api/bot/status"
+  to = "/.netlify/functions/bot-status"
   status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/bot/cycle"
+  to = "/.netlify/functions/bot-cycle"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/bot/sell"
+  to = "/.netlify/functions/bot-sell"
+  status = 200
+  force = true
