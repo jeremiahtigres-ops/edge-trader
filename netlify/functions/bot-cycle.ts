@@ -30,8 +30,8 @@ export default async function handler(req: Request, _context: Context) {
         process.env.URL ||
         process.env.DEPLOY_URL ||
         process.env.NETLIFY_SITE_URL ||
-        `https://dapper-snickerdoodle-dda1b6.netlify.app`;
-
+        `https://${process.env.NETLIFY_SITE_ID}.netlify.app`;
+        
       const bgUrl = `${siteUrl}/.netlify/functions/bot-cycle-background`;
       console.log(`[cycle] Dispatching job ${jobId} to ${bgUrl}`);
 
