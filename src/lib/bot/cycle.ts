@@ -536,30 +536,29 @@ export async function runCycle(onProgress: OnProgress): Promise<CycleResult> {
             0.99
           );
 
-          // Place FOK BUY
-          const order = await client.createMarketBuyOrder({
-            tokenID: tokenId,
-            amount: betSize,
-            price: maxPrice,
-          });
+         // Place FOK BUY
+try {
+  const order = await client.createMarketOrder({
+    tokenID: tokenId,
+    amount: betSize,
+    side: "BUY",
+    price: maxPrice,
+  });
 
-          const resp = await client.postOrder(order, "FOK");
+  const resp = await client.postOrder(order, "FOK");
+  console.log(`[cycle] FOK response for ${bet.slug}:`, JSON.stringify(resp));
 
-          if (!resp?.success) {
-            // FOK failed — set cooldown
-            state.fokCooldowns[bet.slug] = new Date().toISOString();
-            result.skipped.push({
-              slug: bet.slug,
-              reason: "FOK order failed — cooldown set",
-            });
-            await onProgress(
-              makeProgress(
-                "buy",
-                `FOK failed for ${bet.slug} — 30min cooldown set`
-              )
-            );
-            continue;
-          }
+  if (!resp?.success) {
+    state.fokCooldowns[bet.slug] = new Date().toISOString();
+    result.skipped.push({
+      slug: bet.slug,
+      reason: `FOK failed: ${JSON.stringify(resp)}`,
+    });
+    await onProgress(
+      makeProgress("buy", `FOK failed for ${bet.slug}: ${JSON.stringify(resp)}`)
+    );
+    continue;
+  }
 
           // Compute actual fill
           const fillPrice = resp.price
