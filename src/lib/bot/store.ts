@@ -11,10 +11,20 @@ import { DEFAULT_CONFIG } from "./types";
 // STORE HELPERS
 // ============================================================
 
+function getStoreConfig() {
+  const siteID = process.env.NETLIFY_SITE_ID;
+  const token = process.env.NETLIFY_API_TOKEN;
+  if (siteID && token) {
+    return { siteID, token };
+  }
+  return {};
+}
+
 function getBotStore() {
   return getStore({
     name: "bot",
     consistency: "strong",
+    ...getStoreConfig(),
   });
 }
 
@@ -22,9 +32,9 @@ function getJobStore() {
   return getStore({
     name: "bot-jobs",
     consistency: "strong",
+    ...getStoreConfig(),
   });
 }
-
 // ============================================================
 // DEFAULT STATE
 // ============================================================
