@@ -122,15 +122,20 @@ export async function reAuth(): Promise<void> {
 export async function getUsdcBalance(): Promise<number> {
   try {
     const client = await getClobClient() as any;
-    const balance = await client.getBalance();
-    return parseFloat(balance ?? "0");
+    // Try different method names
+    const balance =
+      (await client.getCollateralBalance?.()) ??
+      (await client.getBalance?.()) ??
+      (await client.getUserMarketOrdersBalance?.()) ??
+      "0";
+    return parseFloat(String(balance));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("401") || msg.includes("unauthorized")) {
       await reAuth();
       const client = await getClobClient() as any;
-      const balance = await client.getBalance();
-      return parseFloat(balance ?? "0");
+      const balance = await client.getCollateralBalance?.() ?? "0";
+      return parseFloat(String(balance));
     }
     throw err;
   }
