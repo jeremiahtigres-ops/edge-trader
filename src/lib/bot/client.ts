@@ -122,7 +122,6 @@ export async function reAuth(): Promise<void> {
 export async function getUsdcBalance(): Promise<number> {
   try {
     const client = await getClobClient() as any;
-    const funder = getFunderAddress();
     const sigType = getSigType();
 
     const result = await client.getBalanceAllowance({
@@ -130,20 +129,24 @@ export async function getUsdcBalance(): Promise<number> {
       signature_type: sigType,
     });
 
-    const balance = result?.balance ?? result?.collateral_balance ?? "0";
-    return parseFloat(String(balance));
+    // Balance returned in micro-USDC (6 decimals)
+    const raw = result?.balance ?? result?.collateral_balance ?? "0";
+    const balance = parseFloat(String(raw));
+    
+    // If balance > 1000000 it's in micro units, divide by 1e6
+    return balance > 1000000 ? balance / 1e6 : balance;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("401") || msg.includes("unauthorized")) {
       await reAuth();
       const client = await getClobClient() as any;
-      const sigType = getSigType();
       const result = await client.getBalanceAllowance({
         asset_type: "COLLATERAL",
-        signature_type: sigType,
+        signature_type: getSigType(),
       });
-      const balance = result?.balance ?? "0";
-      return parseFloat(String(balance));
+      const raw = result?.balance ?? "0";
+      const balance = parseFloat(String(raw));
+      return balance > 1000000 ? balance / 1e6 : balance;
     }
     throw err;
   }
