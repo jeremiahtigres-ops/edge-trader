@@ -340,11 +340,24 @@ export async function runCycle(onProgress: OnProgress): Promise<CycleResult> {
           console.log(`[cycle] FOK response for ${bet.slug}:`, JSON.stringify(resp));
 
           if (!resp?.success) {
-            state.fokCooldowns[bet.slug] = new Date().toISOString();
-            result.skipped.push({ slug: bet.slug, reason: `FOK failed: ${JSON.stringify(resp)}` });
-            await onProgress(makeProgress("buy", `FOK failed for ${bet.slug}: ${JSON.stringify(resp)}`));
-            continue;
-          }
+  const isGeoblock =
+    resp?.status === 403 ||
+    JSON.stringify(resp).includes("region") ||
+    JSON.stringify(resp).includes("geoblock");
+
+  if (isGeoblock) {
+    // Blacklist 7 hari
+    const sevenDays = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString();
+    state.fokCooldowns[bet.slug] = sevenDays;
+    result.skipped.push({ slug: bet.slug, reason: "Geoblocked — skipped 7 days" });
+    await onProgress(makeProgress("buy", `Geoblocked: ${bet.slug} — blacklisted 7 days`));
+  } else {
+    state.fokCooldowns[bet.slug] = new Date().toISOString();
+    result.skipped.push({ slug: bet.slug, reason: `FOK failed: ${JSON.stringify(resp)}` });
+    await onProgress(makeProgress("buy", `FOK failed: ${bet.slug}`));
+  }
+  continue;
+}
 
           const fillPrice = resp.price ? parseFloat(resp.price) : book.bestAsk;
           const shares = betSize / fillPrice;
